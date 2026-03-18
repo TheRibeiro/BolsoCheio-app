@@ -1,8 +1,6 @@
 import { useState, useEffect } from 'react'
-import { Trash2, Save, Smartphone, Globe } from 'lucide-react'
-import { BottomSheet } from '../ui/BottomSheet'
-import { Button } from '../ui/Button'
-import { Input } from '../ui/Input'
+import { motion, AnimatePresence } from 'framer-motion'
+import { X, Trash2, Check, Smartphone, Globe, Calendar, DollarSign, Tag, FileText } from 'lucide-react'
 import { CATEGORY_CONFIG, PAYMENT_METHOD_LABELS } from '../../types'
 import type { Expense } from '../../types'
 
@@ -18,109 +16,244 @@ export function ExpenseDetailsSheet({ expense, open, onClose, onDelete, onSave }
   const [title, setTitle] = useState('')
   const [amount, setAmount] = useState('')
   const [date, setDate] = useState('')
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
   useEffect(() => {
     if (expense && open) {
       setTitle(expense.title)
       setAmount(expense.amount.toString())
       setDate(expense.date)
+      setShowDeleteConfirm(false)
     }
   }, [expense, open])
 
+  // Lock body scroll when open
+  useEffect(() => {
+    if (open) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = ''
+    }
+    return () => { document.body.style.overflow = '' }
+  }, [open])
+
   if (!expense) return null
+
+  const config = CATEGORY_CONFIG[expense.category]
+  const sourceIcon = expense.source === 'telegram'
+    ? <Smartphone size={14} className="text-blue-400" />
+    : <Globe size={14} className="text-emerald-400" />
+  const sourceLabel = expense.source === 'telegram' ? 'Telegram' : 'Aplicativo'
 
   const handleSave = () => {
     onSave(expense.id, {
-      title,
+      title: title.trim() || expense.title,
       amount: Number(amount) || expense.amount,
-      date,
+      date: date || expense.date,
     })
     onClose()
   }
 
   const handleDelete = () => {
+    if (!showDeleteConfirm) {
+      setShowDeleteConfirm(true)
+      return
+    }
     onDelete(expense.id)
     onClose()
   }
 
-  const config = CATEGORY_CONFIG[expense.category]
-  const sourceIcon = expense.source === 'telegram' ? <Smartphone size={16} className="text-blue-400" /> : <Globe size={16} className="text-emerald-400" />
-  const sourceLabel = expense.source === 'telegram' ? 'Via Telegram' : 'Via Aplicativo'
-
   return (
-    <BottomSheet open={open} onClose={onClose} title="Detalhes da Transação">
-      <div className="flex flex-col gap-4">
-
-        {/* Header Visualizer */}
-        <div className="flex items-center gap-3 bg-black/5 dark:bg-white/5 p-3 rounded-2xl">
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          className="fixed inset-0 z-[100] flex flex-col"
+          style={{ backgroundColor: 'var(--bg-primary)' }}
+          initial={{ opacity: 0, y: '100%' }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: '100%' }}
+          transition={{ type: 'spring', damping: 28, stiffness: 300 }}
+        >
+          {/* Top Bar */}
           <div
-            className="w-11 h-11 rounded-xl flex items-center justify-center text-2xl shrink-0"
-            style={{
-              backgroundColor: config.color + '20',
-              border: `1px solid ${config.color}30`
-            }}
+            className="shrink-0 flex items-center justify-between px-4 pt-3 pb-2 safe-top"
+            style={{ borderBottom: '1px solid var(--border-color)' }}
           >
-            {config.emoji}
-          </div>
-          <div>
-            <p className="text-sm font-semibold" style={{ color: config.color }}>{config.label}</p>
-            <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
-              {PAYMENT_METHOD_LABELS[expense.paymentMethod]}
-            </p>
-          </div>
-        </div>
+            <motion.button
+              onClick={onClose}
+              whileTap={{ scale: 0.9 }}
+              className="w-10 h-10 rounded-full flex items-center justify-center"
+              style={{ backgroundColor: 'var(--bg-input)' }}
+            >
+              <X size={20} style={{ color: 'var(--text-primary)' }} />
+            </motion.button>
 
-        {/* Edit fields */}
-        <div className="space-y-3">
-          <Input
-            label="Nome da Despesa"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-          />
-          <div className="grid grid-cols-2 gap-3">
-            <Input
-              label="Valor (R$)"
-              type="number"
-              step="0.01"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-            />
-            <Input
-              label="Data"
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-            />
-          </div>
-        </div>
+            <h1
+              className="text-base font-semibold tracking-tight"
+              style={{ color: 'var(--text-primary)' }}
+            >
+              Editar Despesa
+            </h1>
 
-        {/* Read-only metadata */}
-        <div className="bg-black/5 dark:bg-white/5 p-3 rounded-xl space-y-2">
-          {expense.description && (
-             <div className="flex justify-between items-center">
-               <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Descrição:</span>
-               <span className="text-xs font-medium text-right max-w-[60%] truncate" style={{ color: 'var(--text-primary)' }}>{expense.description}</span>
-             </div>
-          )}
-          <div className="flex justify-between items-center">
-             <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Origem:</span>
-             <div className="flex items-center gap-1.5 opacity-80">
-                {sourceIcon}
-                <span className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>{sourceLabel}</span>
-             </div>
+            <motion.button
+              onClick={handleSave}
+              whileTap={{ scale: 0.9 }}
+              className="w-10 h-10 rounded-full flex items-center justify-center"
+              style={{ background: 'linear-gradient(135deg, #6366f1, #a855f7)' }}
+            >
+              <Check size={20} className="text-white" />
+            </motion.button>
           </div>
-        </div>
 
-        {/* Actions */}
-        <div className="flex gap-3 pt-2">
-          <Button variant="danger" size="lg" className="flex-1 flex items-center justify-center gap-2" onClick={handleDelete}>
-            <Trash2 size={16} /> Excluir
-          </Button>
-          <Button variant="primary" size="lg" className="flex-1 flex items-center justify-center gap-2" onClick={handleSave}>
-            <Save size={16} /> Salvar
-          </Button>
-        </div>
-      </div>
-    </BottomSheet>
+          {/* Scrollable Content */}
+          <div className="flex-1 overflow-y-auto overscroll-contain">
+            <div className="px-4 py-5 flex flex-col gap-5">
+
+              {/* Category Hero */}
+              <div
+                className="flex items-center gap-4 p-4 rounded-2xl"
+                style={{
+                  background: `linear-gradient(135deg, ${config.color}15, ${config.color}08)`,
+                  border: `1px solid ${config.color}25`,
+                }}
+              >
+                <div
+                  className="w-14 h-14 rounded-2xl flex items-center justify-center text-3xl shrink-0"
+                  style={{
+                    backgroundColor: config.color + '20',
+                    boxShadow: `0 4px 16px ${config.color}20`,
+                  }}
+                >
+                  {config.emoji}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-base font-bold" style={{ color: config.color }}>
+                    {config.label}
+                  </p>
+                  <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                    {PAYMENT_METHOD_LABELS[expense.paymentMethod]}
+                  </p>
+                </div>
+                <div className="flex items-center gap-1.5 opacity-70">
+                  {sourceIcon}
+                  <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                    {sourceLabel}
+                  </span>
+                </div>
+              </div>
+
+              {/* Title Field */}
+              <div className="flex flex-col gap-2">
+                <label className="text-xs font-semibold flex items-center gap-1.5" style={{ color: 'var(--text-secondary)' }}>
+                  <Tag size={13} />
+                  Nome da Despesa
+                </label>
+                <input
+                  type="text"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="Ex: Almoço no restaurante"
+                  className="w-full px-4 py-3.5 rounded-xl text-base outline-none transition-all duration-200 focus:ring-2 focus:ring-[var(--color-primary)]/30"
+                  style={{
+                    backgroundColor: 'var(--bg-input)',
+                    color: 'var(--text-primary)',
+                    border: '1px solid var(--border-color)',
+                  }}
+                />
+              </div>
+
+              {/* Amount + Date Row */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs font-semibold flex items-center gap-1.5" style={{ color: 'var(--text-secondary)' }}>
+                    <DollarSign size={13} />
+                    Valor (R$)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    inputMode="decimal"
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                    placeholder="0,00"
+                    className="w-full px-4 py-3.5 rounded-xl text-base outline-none transition-all duration-200 focus:ring-2 focus:ring-[var(--color-primary)]/30"
+                    style={{
+                      backgroundColor: 'var(--bg-input)',
+                      color: 'var(--text-primary)',
+                      border: '1px solid var(--border-color)',
+                    }}
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs font-semibold flex items-center gap-1.5" style={{ color: 'var(--text-secondary)' }}>
+                    <Calendar size={13} />
+                    Data
+                  </label>
+                  <input
+                    type="date"
+                    value={date}
+                    onChange={(e) => setDate(e.target.value)}
+                    className="w-full px-4 py-3.5 rounded-xl text-base outline-none transition-all duration-200 focus:ring-2 focus:ring-[var(--color-primary)]/30"
+                    style={{
+                      backgroundColor: 'var(--bg-input)',
+                      color: 'var(--text-primary)',
+                      border: '1px solid var(--border-color)',
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Description (read-only) */}
+              {expense.description && (
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs font-semibold flex items-center gap-1.5" style={{ color: 'var(--text-secondary)' }}>
+                    <FileText size={13} />
+                    Descrição
+                  </label>
+                  <div
+                    className="px-4 py-3 rounded-xl text-sm"
+                    style={{
+                      backgroundColor: 'var(--bg-input)',
+                      color: 'var(--text-muted)',
+                      border: '1px solid var(--border-color)',
+                    }}
+                  >
+                    {expense.description}
+                  </div>
+                </div>
+              )}
+
+              {/* Delete Button */}
+              <div className="pt-2">
+                <motion.button
+                  onClick={handleDelete}
+                  whileTap={{ scale: 0.97 }}
+                  className="w-full py-3.5 rounded-xl flex items-center justify-center gap-2 text-sm font-semibold transition-colors"
+                  style={{
+                    backgroundColor: showDeleteConfirm ? 'var(--color-danger)' : 'transparent',
+                    color: showDeleteConfirm ? '#fff' : 'var(--color-danger)',
+                    border: showDeleteConfirm ? 'none' : '1px solid var(--color-danger)',
+                  }}
+                >
+                  <Trash2 size={16} />
+                  {showDeleteConfirm ? 'Confirmar Exclusão' : 'Excluir Despesa'}
+                </motion.button>
+                {showDeleteConfirm && (
+                  <motion.p
+                    initial={{ opacity: 0, y: -5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="text-xs text-center mt-2"
+                    style={{ color: 'var(--text-muted)' }}
+                  >
+                    Toque novamente para confirmar
+                  </motion.p>
+                )}
+              </div>
+
+            </div>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   )
 }

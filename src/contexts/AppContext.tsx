@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid'
 import type { Expense, AppSettings, Category, Envelope } from '../types'
 import { loadExpenses, saveExpenses, loadSettings, saveSettings } from '../lib/storage'
 import { supabase } from '../lib/supabase'
+import { vibrate } from '../lib/utils'
 import { calculateBillingMonth } from '../lib/utils'
 import { useAuth } from './AuthContext'
 
@@ -127,18 +128,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .on(
         'postgres_changes',
         {
-          event: 'INSERT',
+          event: '*',
           schema: 'public',
           table: 'transactions',
           filter: `user_id=eq.${user.id}`,
         },
         (payload) => {
           try {
-            const newExpense = rowToExpense(payload.new as Record<string, unknown>)
-            setExpenses((prev) => {
-              if (prev.some((e) => e.id === newExpense.id)) return prev
-              return [newExpense, ...prev]
-            })
+            if (payload.eventType === 'INSERT') {
+              const newExpense = rowToExpense(payload.new as Record<string, unknown>)
+              setExpenses((prev) => {
+                if (prev.some((e) => e.id === newExpense.id)) return prev
+                vibrate([50, 100, 50]) // Vibra indicando gasto novo mágico via Bot!
+                return [newExpense, ...prev]
+              })
+            } else if (payload.eventType === 'UPDATE') {
+              const updatedExpense = rowToExpense(payload.new as Record<string, unknown>)
+              setExpenses((prev) => prev.map(e => e.id === updatedExpense.id ? updatedExpense : e))
+            } else if (payload.eventType === 'DELETE') {
+              setExpenses((prev) => prev.filter(e => e.id !== payload.old.id))
+            }
           } catch (err) {
             console.error('Erro ao processar transação realtime:', err)
           }

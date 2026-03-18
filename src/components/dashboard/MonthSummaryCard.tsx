@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { TrendingDown, TrendingUp, Eye, EyeOff } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Card } from '../ui/Card'
-import { formatCurrency } from '../../lib/utils'
+import { NumberTicker } from '../ui/NumberTicker'
+import { calculateBillingMonth, formatCurrency, vibrate } from '../../lib/utils'
 import type { MonthSummary } from '../../types'
 
 interface MonthSummaryCardProps {
@@ -11,16 +12,20 @@ interface MonthSummaryCardProps {
 
 export function MonthSummaryCard({ summary }: MonthSummaryCardProps) {
   const [isVisible, setIsVisible] = useState(true)
+  const totalExpenses = summary.totalSpent
 
   return (
     <Card highlight className="relative overflow-hidden">
       <div className="pt-1">
         <div className="flex items-center justify-between mb-1">
           <p className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>
-            Total do Mês
+            Gasto no mês atual
           </p>
           <button
-            onClick={() => setIsVisible(!isVisible)}
+            onClick={() => {
+              setIsVisible(!isVisible)
+              vibrate(40)
+            }}
             className="p-2.5 -m-1 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
             style={{ color: 'var(--text-muted)' }}
           >
@@ -34,20 +39,16 @@ export function MonthSummaryCard({ summary }: MonthSummaryCardProps) {
           </span>
           <AnimatePresence mode="wait">
             {isVisible ? (
-              <motion.span
+              <NumberTicker
                 key="visible"
+                value={totalExpenses}
                 className="text-3xl sm:text-4xl font-bold"
                 style={{ 
                   letterSpacing: '-0.05em',
                   color: 'var(--text-primary)',
+                  display: 'inline-block'
                 }}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-              >
-                {formatCurrency(summary.totalSpent).replace('R$', '').trim()}
-              </motion.span>
+              />
             ) : (
               <motion.span
                 key="hidden"

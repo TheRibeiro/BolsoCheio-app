@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Home, Clock, Sparkles, Settings as SettingsIcon, Plus } from 'lucide-react'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { AppProvider } from './contexts/AppContext'
+import { vibrate } from './lib/utils'
 import { Dashboard } from './pages/Dashboard'
 import { History } from './pages/History'
 import { Insights } from './pages/Insights'
@@ -70,7 +71,10 @@ function AppContent() {
 
       {/* FAB - Add Expense */}
       <motion.button
-        onClick={() => setShowExpenseForm(true)}
+        onClick={() => {
+          setShowExpenseForm(true)
+          vibrate(50)
+        }}
         whileTap={{ scale: 0.92 }}
         whileHover={{ scale: 1.05 }}
         transition={{ type: 'spring', stiffness: 500, damping: 25 }}
@@ -101,7 +105,10 @@ function AppContent() {
             return (
               <motion.button
                 key={id}
-                onClick={() => setActiveTab(id)}
+                onClick={() => {
+                  setActiveTab(id)
+                  vibrate(20)
+                }}
                 whileTap={{ scale: 0.9 }}
                 transition={{ type: 'spring', stiffness: 500, damping: 30 }}
                 className="flex flex-col items-center gap-0.5 py-2 px-4 rounded-xl min-w-[48px]"

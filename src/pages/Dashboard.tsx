@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { motion, type Variants } from 'framer-motion'
 import { useApp } from '../contexts/AppContext'
 import { MonthSummaryCard } from '../components/dashboard/MonthSummaryCard'
+import { SubscriptionCard } from '../components/dashboard/SubscriptionCard'
 import { CategoryBreakdown } from '../components/dashboard/CategoryBreakdown'
 import { RecentExpenses } from '../components/dashboard/RecentExpenses'
 import { ExpenseDetailsSheet } from '../components/expenses/ExpenseDetailsSheet'
@@ -56,6 +57,11 @@ export function Dashboard() {
       {/* Resumo do Mês */}
       <motion.div variants={itemVariants}>
         <MonthSummaryCard summary={summary} />
+      </motion.div>
+
+      {/* Assinaturas */}
+      <motion.div variants={itemVariants}>
+        <SubscriptionCard expenses={expenses} />
       </motion.div>
 
       {/* Categorias com Envelopes */}

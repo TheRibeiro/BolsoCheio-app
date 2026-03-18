@@ -242,3 +242,12 @@ export function getEnvelopeColor(spent: number, limit: number): string {
   if (ratio <= 0.85) return '#f59e0b' // amarelo
   return '#ef4444' // vermelho
 }
+
+/**
+ * Dispara um haptic feedback seguro no dispositivo
+ */
+export function vibrate(pattern: number | number[] = 50) {
+  if (typeof navigator !== 'undefined' && navigator.vibrate) {
+    navigator.vibrate(pattern)
+  }
+}
