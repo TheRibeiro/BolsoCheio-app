@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Mail, Lock, User, Eye, EyeOff } from 'lucide-react'
+import { Lock, User, Eye, EyeOff, AtSign } from 'lucide-react'
 import { Button } from '../ui/Button'
 import { useAuth } from '../../contexts/AuthContext'
 
@@ -13,7 +13,7 @@ const springTransition = {
 export function AuthScreen() {
   const { signIn, signUp } = useAuth()
   const [isLogin, setIsLogin] = useState(true)
-  const [email, setEmail] = useState('')
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [fullName, setFullName] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -28,7 +28,7 @@ export function AuthScreen() {
     setLoading(true)
 
     if (isLogin) {
-      const { error } = await signIn(email, password)
+      const { error } = await signIn(username, password)
       if (error) setError(error)
     } else {
       if (!fullName.trim()) {
@@ -36,7 +36,7 @@ export function AuthScreen() {
         setLoading(false)
         return
       }
-      const { error } = await signUp(email, password, fullName.trim())
+      const { error } = await signUp(username, password, fullName.trim())
       if (error) {
         setError(error)
       }
@@ -153,17 +153,19 @@ export function AuthScreen() {
           </AnimatePresence>
 
           <div className="relative">
-            <Mail
+            <AtSign
               size={18}
               className="absolute left-3.5 top-1/2 -translate-y-1/2"
               style={{ color: 'var(--text-muted)' }}
             />
             <input
-              type="email"
-              placeholder="seu@email.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              type="text"
+              placeholder="Nome de usuário"
+              value={username}
+              onChange={(e) => setUsername(e.target.value.replace(/[^a-zA-Z0-9._-]/g, ''))}
               required
+              autoCapitalize="none"
+              autoCorrect="off"
               className="w-full pl-11 pr-4 py-3.5 rounded-xl text-sm outline-none focus:ring-2 focus:ring-[var(--color-primary)]/30"
               style={{
                 backgroundColor: 'var(--bg-input)',

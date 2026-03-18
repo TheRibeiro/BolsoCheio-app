@@ -9,8 +9,8 @@ interface AuthContextType {
   session: Session | null
   loading: boolean
   isOnline: boolean
-  signUp: (email: string, password: string, fullName: string) => Promise<{ error: string | null }>
-  signIn: (email: string, password: string) => Promise<{ error: string | null }>
+  signUp: (username: string, password: string, fullName: string) => Promise<{ error: string | null }>
+  signIn: (username: string, password: string) => Promise<{ error: string | null }>
   signOut: () => Promise<void>
   updateProfile: (updates: Partial<UserProfile>) => Promise<{ error: string | null }>
   refreshProfile: () => Promise<void>
@@ -107,19 +107,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [isOnline, fetchProfile])
 
-  const signUp = useCallback(async (email: string, password: string, fullName: string) => {
+  const signUp = useCallback(async (username: string, password: string, fullName: string) => {
+    const email = `${username.toLowerCase().trim()}@bolsocheio.app`
     const { error } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        data: { full_name: fullName },
+        data: { full_name: fullName, username: username.toLowerCase().trim() },
       },
     })
+    if (error?.message === 'User already registered') {
+      return { error: 'Este usuário já existe' }
+    }
     return { error: error?.message ?? null }
   }, [])
 
-  const signIn = useCallback(async (email: string, password: string) => {
+  const signIn = useCallback(async (username: string, password: string) => {
+    const email = `${username.toLowerCase().trim()}@bolsocheio.app`
     const { error } = await supabase.auth.signInWithPassword({ email, password })
+    if (error?.message === 'Invalid login credentials') {
+      return { error: 'Usuário ou senha incorretos' }
+    }
     return { error: error?.message ?? null }
   }, [])
 
