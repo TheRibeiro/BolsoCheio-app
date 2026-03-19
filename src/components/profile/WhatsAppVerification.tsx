@@ -15,6 +15,7 @@ export function WhatsAppVerification() {
   )
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [devCode, setDevCode] = useState<string | null>(null)
 
   function formatPhone(value: string): string {
     const digits = value.replace(/\D/g, '')
@@ -37,38 +38,39 @@ export function WhatsAppVerification() {
 
     setLoading(true)
     setError(null)
+    setDevCode(null)
 
-    // Gera código de 6 dígitos
-    const verificationCode = String(Math.floor(100000 + Math.random() * 900000))
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString() // 10 min
+    try {
+      // Obtém o token de autenticação do usuário
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        setError('Sessão expirada. Faça login novamente.')
+        setLoading(false)
+        return
+      }
 
-    // Salva o número e código no profile
-    const { error: updateError } = await updateProfile({
-      whatsapp_number: cleanPhone,
-      is_whatsapp_verified: false,
-    } as Partial<typeof profile & { whatsapp_verification_code: string; whatsapp_verification_expires_at: string }>)
-
-    if (updateError) {
-      setError(updateError)
-      setLoading(false)
-      return
-    }
-
-    // Atualiza código diretamente (campos não expostos no UserProfile)
-    await supabase
-      .from('profiles')
-      .update({
-        whatsapp_verification_code: verificationCode,
-        whatsapp_verification_expires_at: expiresAt,
+      // Chama a Edge Function que gera e envia o OTP via WhatsApp
+      const { data, error: fnError } = await supabase.functions.invoke('send-whatsapp-otp', {
+        body: { phone: cleanPhone },
       })
-      .eq('id', profile!.id)
 
-    // Na produção, aqui chamaria a API do WhatsApp para enviar o código.
-    // Por enquanto, mostramos no console para desenvolvimento.
-    console.log(`[DEV] Código de verificação WhatsApp: ${verificationCode}`)
+      if (fnError) {
+        setError(fnError.message || 'Erro ao enviar código')
+        setLoading(false)
+        return
+      }
 
-    setStep('verify')
-    setLoading(false)
+      // Em modo dev (sem credenciais Meta configuradas), mostra o código na UI
+      if (data?.dev && data?.code) {
+        setDevCode(data.code)
+      }
+
+      setStep('verify')
+    } catch (err) {
+      setError('Erro de conexão. Tente novamente.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   async function handleVerifyCode() {
@@ -120,6 +122,7 @@ export function WhatsAppVerification() {
 
     await refreshProfile()
     setStep('verified')
+    setDevCode(null)
     setLoading(false)
   }
 
@@ -132,6 +135,7 @@ export function WhatsAppVerification() {
     await refreshProfile()
     setPhone('')
     setCode('')
+    setDevCode(null)
     setStep('input')
     setLoading(false)
   }
@@ -227,6 +231,18 @@ export function WhatsAppVerification() {
               Código enviado para {getCleanPhone()}
             </p>
           </div>
+
+          {devCode && (
+            <div
+              className="flex items-center gap-2 p-3 rounded-xl"
+              style={{ backgroundColor: '#f59e0b15', border: '1px solid #f59e0b30' }}
+            >
+              <p className="text-xs font-mono" style={{ color: '#f59e0b' }}>
+                [DEV] Código: {devCode}
+              </p>
+            </div>
+          )}
+
           <input
             type="text"
             inputMode="numeric"
@@ -254,7 +270,7 @@ export function WhatsAppVerification() {
             {loading ? 'Verificando...' : 'Verificar Código'}
           </Button>
           <button
-            onClick={() => { setStep('input'); setError(null); setCode('') }}
+            onClick={() => { setStep('input'); setError(null); setCode(''); setDevCode(null) }}
             className="text-xs text-center"
             style={{ color: 'var(--text-muted)' }}
           >

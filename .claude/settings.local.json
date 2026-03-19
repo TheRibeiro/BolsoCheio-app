@@ -4,7 +4,13 @@
       "Bash(npm install:*)",
       "Bash(npx tsc:*)",
       "Bash(npm run build:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(npm view:*)",
+      "Bash(npx vite build)",
+      "Bash(supabase --version:*)",
+      "Bash(npx supabase:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nfeat: integração WhatsApp Business API com paridade ao Telegram\n\n- Adicionar WhatsAppVerification na página de Configurações\n- Criar Edge Function send-whatsapp-otp para envio de OTP via Graph API\n- Atualizar WhatsAppVerification.tsx para usar Edge Function em vez de console.log\n- Atualizar whatsapp-webhook com prompt Gemini avançado, detecção de cartão\n  ambíguo, fluxo crédito/débito pendente e comandos \\(ajuda, oi\\)\n\nCo-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>\nEOF\n\\)\")"
     ]
   }
 }

@@ -1,6 +1,7 @@
 // ============================================================
 // BolsoCheio - Edge Function: WhatsApp Webhook
 // O "Cérebro" que integra WhatsApp + Gemini AI + Supabase
+// Paridade completa com Telegram Bot
 // ============================================================
 // Deploy: supabase functions deploy whatsapp-webhook --no-verify-jwt
 // ============================================================
@@ -14,7 +15,8 @@ interface GeminiExpenseResult {
   categoria: string
   tipo_pagamento: 'pix' | 'cartao' | 'dinheiro' | 'debito'
   recorrente: boolean
-  descricao?: string
+  confirmacao_msg: string
+  pergunta?: string
 }
 
 interface WhatsAppMessage {
@@ -31,23 +33,73 @@ const VALID_CATEGORIES = [
   'educacao', 'moradia', 'vestuario', 'assinaturas', 'outros',
 ]
 
-const GEMINI_SYSTEM_PROMPT = `Você é um extrator de dados financeiros brasileiro.
-Sua função é converter frases do usuário em JSON estruturado.
+// Prompt Gemini avançado — idêntico ao Telegram
+const GEMINI_SYSTEM_PROMPT = `Você é um analista financeiro de elite e extrator de dados JSON. Sua tarefa é processar mensagens de gastos enviadas por brasileiros via WhatsApp e converter em dados estruturados.
 
-REGRAS:
-1. Extraia o valor numérico mencionado (sempre em Reais brasileiros)
-2. Crie um título curto e descritivo
-3. Classifique em UMA destas categorias: alimentacao, transporte, lazer, saude, educacao, moradia, vestuario, assinaturas, outros
-4. Identifique o tipo de pagamento: pix, cartao, dinheiro, debito. Se não mencionado, assuma "pix"
-5. Identifique se é gasto recorrente (assinatura, mensalidade): true/false
-6. Adicione uma descrição breve se houver contexto extra
+### REGRAS DE CATEGORIZAÇÃO (ABRANGENTE):
+1. ALIMENTAÇÃO (alimentacao): Restaurantes, iFood/Delivery, Mercado, Supermercado, Padaria, Cafés, Bares que servem comida, Churrasco, Açaí, Lanche, Fast Food, Feira.
+2. TRANSPORTE (transporte): Uber, 99, Gasolina, Posto de Combustível, Estacionamento, Pedágio, Manutenção de Carro, Ônibus/Metrô, IPVA, Seguro do Carro, Multa de Trânsito, Licenciamento, Lavagem de Carro, Pneu, Óleo.
+3. LAZER (lazer): Ingressos de Festas/Shows, Cinema, Baladas, Viagens (Hospedagem/Passagens), Hobbies, Eventos Sociais, Bebidas em Balada, Jogos, Parques, Teatro, Streaming de Jogos, Apostas.
+4. SAÚDE (saude): Farmácia, Médicos, Exames, Dentista, Psicólogo, Suplementos, Plano de Saúde, Fisioterapia, Óculos/Lentes, Vacinas, Cirurgias, Hospital.
+5. EDUCAÇÃO (educacao): Cursos, Livros, Mensalidade Escolar/Faculdade, Workshops, Kindle, Material Escolar, Apostilas, Certificações, Idiomas, TCC, Formatura.
+6. MORADIA (moradia): Aluguel, Condomínio, Contas de Luz/Água/Gás/Internet, IPTU, Reformas, Decoração, Faxina/Diarista, Móveis, Eletrodomésticos, Seguro Residencial, Mudança, Dedetização, Manutenção Casa.
+7. VESTUÁRIO (vestuario): Roupas, Tênis/Sapatos, Acessórios, Barbeiro, Salão de Beleza, Perfumaria, Maquiagem, Relógio, Óculos de Sol, Bolsas, Joias/Bijuterias.
+8. ASSINATURAS (assinaturas): Netflix, Spotify, iCloud, GamePass, YouTube Premium, Academia, Plano de Celular, Amazon Prime, Disney+, HBO, Globoplay, ChatGPT Plus, Dropbox, Adobe.
+9. OUTROS (outros): Presentes, Doações, Tarifas Bancárias, Correios, Cartório, Documentos, Pet (Ração/Veterinário), Impostos não categorizados, Empréstimos, Coisas que não se encaixam nas categorias acima.
 
-RESPONDA APENAS com JSON válido, sem markdown, sem explicação:
-{"valor": 0, "titulo": "", "categoria": "", "tipo_pagamento": "", "recorrente": false, "descricao": ""}
+### LÓGICA DE PAGAMENTO:
+- Se mencionar "crédito", "fatura", "parcelado" -> "cartao"
+- Se mencionar "débito", "conta corrente" -> "debito"
+- Se mencionar APENAS "cartão" SEM especificar crédito ou débito -> responda com pergunta (ver abaixo)
+- Se mencionar "pix", "transferência", "ted" -> "pix"
+- Se mencionar "dinheiro", "espécie", "nota", "cédula" -> "dinheiro"
+- Se NÃO mencionar forma de pagamento, assuma "pix"
+
+### REGRA ESPECIAL - "CARTÃO" AMBÍGUO:
+Se o usuário disser apenas "cartão" sem especificar crédito ou débito, retorne:
+{"pergunta": "💳 Foi no cartão de crédito ou débito?"}
+NÃO registre o gasto neste caso. Aguarde a resposta.
+
+### FORMATO DE SAÍDA (OBRIGATÓRIO):
+Retorne APENAS o objeto JSON abaixo, sem textos explicativos:
+{"valor": 0, "titulo": "", "categoria": "", "tipo_pagamento": "pix", "recorrente": false, "confirmacao_msg": ""}
+
+### EXEMPLOS PARA APRENDIZADO:
+- "Comprei ingresso pra festa da facul 80 reais": {"valor": 80, "titulo": "Ingresso Festa", "categoria": "lazer", "tipo_pagamento": "pix", "recorrente": false, "confirmacao_msg": "✅ R$ 80,00 anotados em Lazer! Divirta-se! 🎉"}
+- "Paguei 35 de Uber no crédito": {"valor": 35, "titulo": "Uber", "categoria": "transporte", "tipo_pagamento": "cartao", "recorrente": false, "confirmacao_msg": "✅ R$ 35,00 em Transporte (Crédito). Boa viagem! 🚗"}
+- "Cortei o cabelo 50 pila": {"valor": 50, "titulo": "Barbeiro", "categoria": "vestuario", "tipo_pagamento": "pix", "recorrente": false, "confirmacao_msg": "✅ R$ 50,00 em Vestuário/Beleza. Ficou na régua! 💈"}
+- "IPVA 1800 no débito": {"valor": 1800, "titulo": "IPVA", "categoria": "transporte", "tipo_pagamento": "debito", "recorrente": false, "confirmacao_msg": "✅ R$ 1.800,00 em Transporte (IPVA). Tá em dia! 🚗"}
+- "IPTU 450 reais": {"valor": 450, "titulo": "IPTU", "categoria": "moradia", "tipo_pagamento": "pix", "recorrente": false, "confirmacao_msg": "✅ R$ 450,00 em Moradia (IPTU). Casa em ordem! 🏠"}
+- "Conta de luz 180": {"valor": 180, "titulo": "Conta de Luz", "categoria": "moradia", "tipo_pagamento": "pix", "recorrente": true, "confirmacao_msg": "✅ R$ 180,00 em Moradia (Luz). Anotado! ⚡"}
+- "Mensalidade faculdade 1200 no cartão": {"pergunta": "💳 Faculdade R$ 1.200,00 - foi no cartão de crédito ou débito?"}
+- "Paguei 50 no mercado no débito": {"valor": 50, "titulo": "Mercado", "categoria": "alimentacao", "tipo_pagamento": "debito", "recorrente": false, "confirmacao_msg": "✅ R$ 50,00 em Alimentação (Débito). Geladeira cheia! 🛒"}
+- "Ração do cachorro 120": {"valor": 120, "titulo": "Ração Pet", "categoria": "outros", "tipo_pagamento": "pix", "recorrente": false, "confirmacao_msg": "✅ R$ 120,00 em Outros (Pet). Au au! 🐕"}
 
 Se a mensagem NÃO for sobre um gasto financeiro, responda:
 {"erro": "Não entendi como um gasto. Tente algo como: Gastei 50 reais no almoço"}
+
+IMPORTANTE: Se o tipo_pagamento for "cartao" ou "debito", SEMPRE use o valor que foi determinado. Não tente questionar - a verificação de ambiguidade é feita externamente.
 `
+
+// --- Detectar "cartão" ambíguo na mensagem (verificação no código, não na IA) ---
+function hasAmbiguousCard(text: string): boolean {
+  const lower = text.toLowerCase()
+  const hasCartao = /cart[aã]o/.test(lower)
+  if (!hasCartao) return false
+
+  const hasCreditKeyword = /cr[eé]dito|fatura|parcelado|parcela/.test(lower)
+  const hasDebitKeyword = /d[eé]bito|conta\s*corrente/.test(lower)
+
+  return !hasCreditKeyword && !hasDebitKeyword
+}
+
+// --- Detectar comandos de texto no WhatsApp ---
+function isCommand(text: string): string | null {
+  const lower = text.toLowerCase().trim()
+  if (lower === 'ajuda' || lower === 'help' || lower === '/ajuda' || lower === '/help') return 'help'
+  if (lower === 'oi' || lower === 'olá' || lower === 'ola' || lower === 'start' || lower === '/start') return 'start'
+  return null
+}
 
 // --- Supabase Client (service_role bypassa RLS) ---
 function getSupabaseAdmin() {
@@ -116,12 +168,10 @@ function calculateBillingMonth(transactionDate: Date, closingDay: number): strin
   const month = transactionDate.getMonth()
 
   if (day > closingDay) {
-    // Gasto após fechamento → fatura do mês seguinte
     const nextMonth = new Date(year, month + 1, 1)
     return `${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, '0')}`
   }
 
-  // Fatura do mês atual
   return `${year}-${String(month + 1).padStart(2, '0')}`
 }
 
@@ -134,12 +184,10 @@ async function saveTransaction(
   const supabase = getSupabaseAdmin()
   const now = new Date()
 
-  // Validar e normalizar categoria
   const category = VALID_CATEGORIES.includes(expense.categoria)
     ? expense.categoria
     : 'outros'
 
-  // Mapear tipo de pagamento
   const paymentMap: Record<string, string> = {
     cartao: 'credito',
     pix: 'pix',
@@ -148,7 +196,6 @@ async function saveTransaction(
   }
   const paymentType = paymentMap[expense.tipo_pagamento] || 'pix'
 
-  // Calcular billing month se for cartão
   const billingMonth = paymentType === 'credito'
     ? calculateBillingMonth(now, closingDay)
     : null
@@ -160,7 +207,7 @@ async function saveTransaction(
       title: expense.titulo,
       amount: expense.valor,
       category,
-      description: expense.descricao || null,
+      description: null,
       date_transaction: now.toISOString().split('T')[0],
       payment_type: paymentType,
       expense_type: expense.recorrente ? 'fixo' : 'variavel',
@@ -205,6 +252,9 @@ async function sendWhatsAppMessage(to: string, message: string) {
     return
   }
 
+  // Meta espera o número sem o +
+  const cleanTo = to.startsWith('+') ? to.slice(1) : to
+
   await fetch(
     `https://graph.facebook.com/v21.0/${phoneId}/messages`,
     {
@@ -215,7 +265,7 @@ async function sendWhatsAppMessage(to: string, message: string) {
       },
       body: JSON.stringify({
         messaging_product: 'whatsapp',
-        to,
+        to: cleanTo,
         type: 'text',
         text: { body: message },
       }),
@@ -223,11 +273,18 @@ async function sendWhatsAppMessage(to: string, message: string) {
   )
 }
 
+// --- Formatar valor em Reais ---
+function formatBRL(value: number): string {
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  }).format(value)
+}
+
 // --- Endpoint simplificado para testes via Postman ---
 async function handleTestEndpoint(body: { phone: string; message: string }) {
   const normalizedPhone = body.phone.startsWith('+') ? body.phone : `+${body.phone}`
 
-  // PASSO A: Validar remetente
   const { valid, profile } = await validateSender(normalizedPhone)
   if (!valid || !profile) {
     return Response.json({
@@ -237,7 +294,16 @@ async function handleTestEndpoint(body: { phone: string; message: string }) {
     }, { status: 401 })
   }
 
-  // PASSO B: Chamar IA
+  // Verificar "cartão" ambíguo
+  if (hasAmbiguousCard(body.message)) {
+    return Response.json({
+      status: 'question',
+      question: '💳 Foi no cartão de crédito ou débito?',
+      phone: normalizedPhone,
+      user: profile.full_name,
+    }, { status: 200 })
+  }
+
   const aiResult = await callGeminiAI(body.message)
 
   if ('erro' in aiResult) {
@@ -249,7 +315,15 @@ async function handleTestEndpoint(body: { phone: string; message: string }) {
     }, { status: 200 })
   }
 
-  // PASSO C + D: Salvar transação
+  if ('pergunta' in aiResult && aiResult.pergunta) {
+    return Response.json({
+      status: 'question',
+      question: aiResult.pergunta,
+      phone: normalizedPhone,
+      user: profile.full_name,
+    }, { status: 200 })
+  }
+
   const transaction = await saveTransaction(
     profile.id,
     aiResult,
@@ -264,7 +338,6 @@ async function handleTestEndpoint(body: { phone: string; message: string }) {
     'processed'
   )
 
-  // Retorna tudo para o Postman ver
   return Response.json({
     status: 'processed',
     user: {
@@ -279,16 +352,8 @@ async function handleTestEndpoint(body: { phone: string; message: string }) {
         ? calculateBillingMonth(new Date(), profile.closing_day_card)
         : null,
     },
-    would_reply: `✅ Gasto registrado!\n📝 ${aiResult.titulo}\n💰 ${formatBRL(aiResult.valor)}\n📂 ${aiResult.categoria}`,
+    would_reply: aiResult.confirmacao_msg,
   }, { status: 200 })
-}
-
-// --- Formatar valor em Reais ---
-function formatBRL(value: number): string {
-  return new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-  }).format(value)
 }
 
 // ============================================================
@@ -330,7 +395,6 @@ Deno.serve(async (req: Request) => {
       const messages: WhatsAppMessage[] = value?.messages
 
       if (!messages || messages.length === 0) {
-        // Pode ser status update, delivery receipt, etc.
         return new Response('OK', { status: 200 })
       }
 
@@ -345,7 +409,45 @@ Deno.serve(async (req: Request) => {
       const normalizedPhone = phoneNumber.startsWith('+') ? phoneNumber : `+${phoneNumber}`
       const messageText = message.text.body
 
-      console.log(`Message from ${normalizedPhone}: ${messageText}`)
+      console.log(`WhatsApp message from ${normalizedPhone}: ${messageText}`)
+
+      // --- Detectar comandos antes de tudo ---
+      const command = isCommand(messageText)
+
+      if (command === 'start') {
+        await sendWhatsAppMessage(
+          phoneNumber,
+          '👋 Olá! Eu sou o bot do *BolsoCheio*!\n\n' +
+          'Para começar, vincule sua conta:\n' +
+          '1. Abra o app BolsoCheio\n' +
+          '2. Vá em Configurações > WhatsApp Bot\n' +
+          '3. Insira seu número e confirme o código\n\n' +
+          'Depois de vincular, envie mensagens como:\n' +
+          '• "Gastei 45 no almoço"\n' +
+          '• "Uber 23 reais"\n' +
+          '• "Netflix 55,90 cartão"\n\n' +
+          'Eu uso IA para entender e categorizar automaticamente! 🤖'
+        )
+        return new Response('OK', { status: 200 })
+      }
+
+      if (command === 'help') {
+        await sendWhatsAppMessage(
+          phoneNumber,
+          '📖 *Como usar o BolsoCheio Bot*\n\n' +
+          'Envie uma mensagem descrevendo seu gasto:\n\n' +
+          '• "Gastei 45 no almoço"\n' +
+          '• "Uber 23 reais"\n' +
+          '• "Netflix 55,90 cartão"\n' +
+          '• "Comprei remédio 89,90 débito"\n' +
+          '• "Paguei aluguel 1500"\n\n' +
+          'Eu uso IA para entender valor, categoria e forma de pagamento automaticamente! 🤖\n\n' +
+          '*Comandos:*\n' +
+          'ajuda - Mostra esta mensagem\n' +
+          'oi - Mensagem de boas-vindas'
+        )
+        return new Response('OK', { status: 200 })
+      }
 
       // --- PASSO A: Validar remetente ---
       const { valid, profile } = await validateSender(normalizedPhone)
@@ -361,20 +463,78 @@ Deno.serve(async (req: Request) => {
         return new Response('OK', { status: 200 })
       }
 
-      // --- PASSO B: Chamar IA ---
-      const aiResult = await callGeminiAI(messageText)
+      const supabase = getSupabaseAdmin()
 
-      // Verificar se a IA retornou erro
-      if ('erro' in aiResult) {
-        await logWhatsApp(normalizedPhone, messageText, aiResult as Record<string, unknown>, null, 'error', aiResult.erro)
+      // --- Verificar se é resposta a uma pergunta pendente (crédito/débito) ---
+      const lowerText = messageText.toLowerCase().trim()
+      const isCreditAnswer = /cr[eé]dito/.test(lowerText)
+      const isDebitAnswer = /d[eé]bito/.test(lowerText)
+
+      if (isCreditAnswer || isDebitAnswer) {
+        // Busca a última mensagem pendente deste número
+        const { data: pendingLog } = await supabase
+          .from('whatsapp_log')
+          .select('id, message_text')
+          .eq('phone_number', normalizedPhone)
+          .eq('status', 'pending_card_type')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single()
+
+        if (pendingLog?.message_text) {
+          // Reprocessa a mensagem original com a especificação
+          const clarifiedMessage = pendingLog.message_text + (isCreditAnswer ? ' no crédito' : ' no débito')
+
+          // Marca o log pendente como recebido
+          await supabase.from('whatsapp_log').update({ status: 'received' }).eq('id', pendingLog.id)
+
+          // Processa a mensagem clarificada
+          const aiResult = await callGeminiAI(clarifiedMessage)
+
+          if ('erro' in aiResult) {
+            await sendWhatsAppMessage(phoneNumber, `🤔 ${aiResult.erro}`)
+            return new Response('OK', { status: 200 })
+          }
+
+          const transaction = await saveTransaction(profile.id, aiResult, profile.closing_day_card)
+          await logWhatsApp(normalizedPhone, clarifiedMessage, aiResult as unknown as Record<string, unknown>, transaction.id, 'processed')
+
+          const billingInfo = aiResult.tipo_pagamento === 'cartao'
+            ? `\n📅 Fatura: ${calculateBillingMonth(new Date(), profile.closing_day_card)}`
+            : ''
+
+          await sendWhatsAppMessage(
+            phoneNumber,
+            aiResult.confirmacao_msg + billingInfo +
+            (aiResult.recorrente ? '\n🔄 Recorrente' : '')
+          )
+          return new Response('OK', { status: 200 })
+        }
+      }
+
+      // --- Verificar "cartão" ambíguo ANTES de chamar a IA ---
+      if (hasAmbiguousCard(messageText)) {
+        await logWhatsApp(normalizedPhone, messageText, null, null, 'pending_card_type')
         await sendWhatsAppMessage(
           phoneNumber,
-          `🤔 ${aiResult.erro}\n\nExemplos:\n• "Gastei 45 no almoço"\n• "Uber 23 reais"\n• "Netflix 55,90 cartão"`
+          '💳 Foi no cartão de *crédito* ou *débito*?'
         )
         return new Response('OK', { status: 200 })
       }
 
-      // --- PASSO C + D: Calcular fatura e salvar ---
+      // --- Chamar IA ---
+      const aiResult = await callGeminiAI(messageText)
+
+      if ('erro' in aiResult) {
+        await logWhatsApp(normalizedPhone, messageText, aiResult as Record<string, unknown>, null, 'error', aiResult.erro)
+        await sendWhatsAppMessage(
+          phoneNumber,
+          `🤔 ${aiResult.erro}\n\nExemplos:\n• "Gastei 45 no almoço"\n• "Uber 23 reais"\n• "Netflix 55,90 no crédito"`
+        )
+        return new Response('OK', { status: 200 })
+      }
+
+      // --- Salvar transação ---
       const transaction = await saveTransaction(
         profile.id,
         aiResult,
@@ -389,23 +549,15 @@ Deno.serve(async (req: Request) => {
         'processed'
       )
 
-      // --- Resposta de confirmação ---
-      const paymentLabel = aiResult.tipo_pagamento === 'cartao' ? '💳 Cartão' :
-                          aiResult.tipo_pagamento === 'pix' ? '📱 PIX' :
-                          aiResult.tipo_pagamento === 'dinheiro' ? '💵 Dinheiro' : '🏦 Débito'
-
+      // --- Resposta de confirmação (usa a mensagem personalizada da IA) ---
       const billingInfo = aiResult.tipo_pagamento === 'cartao'
         ? `\n📅 Fatura: ${calculateBillingMonth(new Date(), profile.closing_day_card)}`
         : ''
 
       await sendWhatsAppMessage(
         phoneNumber,
-        `✅ Gasto registrado, ${profile.full_name?.split(' ')[0] || 'amigo'}!\n\n` +
-        `📝 ${aiResult.titulo}\n` +
-        `💰 ${formatBRL(aiResult.valor)}\n` +
-        `📂 ${aiResult.categoria}\n` +
-        `${paymentLabel}${billingInfo}\n` +
-        `${aiResult.recorrente ? '🔄 Recorrente' : ''}`
+        aiResult.confirmacao_msg + billingInfo +
+        (aiResult.recorrente ? '\n🔄 Recorrente' : '')
       )
 
       return new Response('OK', { status: 200 })

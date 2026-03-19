@@ -8,6 +8,7 @@ import { BottomSheet } from '../components/ui/BottomSheet'
 import { useApp } from '../contexts/AppContext'
 import { useAuth } from '../contexts/AuthContext'
 import { TelegramVerification } from '../components/profile/TelegramVerification'
+import { WhatsAppVerification } from '../components/profile/WhatsAppVerification'
 import { CATEGORY_CONFIG } from '../types'
 import type { Category } from '../types'
 import { formatCurrency } from '../lib/utils'
@@ -127,6 +128,13 @@ export function Settings() {
       {isOnline && user && (
         <motion.div variants={itemVariants}>
           <TelegramVerification />
+        </motion.div>
+      )}
+
+      {/* WhatsApp Bot (só quando logado) */}
+      {isOnline && user && (
+        <motion.div variants={itemVariants}>
+          <WhatsAppVerification />
         </motion.div>
       )}
 
