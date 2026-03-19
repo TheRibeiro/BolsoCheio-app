@@ -5,6 +5,7 @@ import { Input } from '../ui/Input'
 import { Select } from '../ui/Select'
 import { Button } from '../ui/Button'
 import { Toggle } from '../ui/Toggle'
+import { ConfirmToast } from '../ui/ConfirmToast'
 import { useApp } from '../../contexts/AppContext'
 import { CATEGORY_CONFIG, PAYMENT_METHOD_LABELS } from '../../types'
 import type { Category, PaymentMethod, ExpenseType } from '../../types'
@@ -41,6 +42,7 @@ export function ExpenseForm({ open, onClose }: ExpenseFormProps) {
   const [type, setType] = useState<ExpenseType>('variavel')
   const [description, setDescription] = useState('')
   const [isRecurring, setIsRecurring] = useState(false)
+  const [showConfirm, setShowConfirm] = useState(false)
 
   function resetForm() {
     setAmount('')
@@ -55,12 +57,14 @@ export function ExpenseForm({ open, onClose }: ExpenseFormProps) {
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-
     const numericAmount = parseFloat(amount.replace(',', '.'))
     if (!numericAmount || numericAmount <= 0 || !title.trim()) return
+    setShowConfirm(true)
+  }
 
+  function handleConfirmSubmit() {
+    const numericAmount = parseFloat(amount.replace(',', '.'))
     const tags = extractTags(description)
-
     addExpense({
       title: title.trim(),
       amount: numericAmount,
@@ -72,7 +76,7 @@ export function ExpenseForm({ open, onClose }: ExpenseFormProps) {
       tags: tags.length > 0 ? tags : undefined,
       isRecurring,
     })
-
+    setShowConfirm(false)
     resetForm()
     onClose()
   }
@@ -215,6 +219,17 @@ export function ExpenseForm({ open, onClose }: ExpenseFormProps) {
           Anotar Gasto
         </Button>
       </form>
+
+      <ConfirmToast
+        open={showConfirm}
+        title="Confirmar gasto?"
+        description={`${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(parseFloat(amount.replace(',', '.')) || 0)} em "${title.trim()}"`}
+        confirmLabel="Sim, anotar"
+        cancelLabel="Cancelar"
+        danger={false}
+        onConfirm={handleConfirmSubmit}
+        onCancel={() => setShowConfirm(false)}
+      />
     </BottomSheet>
   )
 }

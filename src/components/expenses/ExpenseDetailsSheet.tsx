@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { X, Trash2, Check, Smartphone, Globe, Calendar, DollarSign, Tag, FileText } from 'lucide-react'
 import { CATEGORY_CONFIG, PAYMENT_METHOD_LABELS } from '../../types'
 import type { Expense } from '../../types'
+import { ConfirmToast } from '../ui/ConfirmToast'
 
 interface ExpenseDetailsSheetProps {
   expense: Expense | null
@@ -16,14 +17,14 @@ export function ExpenseDetailsSheet({ expense, open, onClose, onDelete, onSave }
   const [title, setTitle] = useState('')
   const [amount, setAmount] = useState('')
   const [date, setDate] = useState('')
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [confirm, setConfirm] = useState<{ open: boolean; mode: 'save' | 'delete' }>({ open: false, mode: 'save' })
 
   useEffect(() => {
     if (expense && open) {
       setTitle(expense.title)
       setAmount(expense.amount.toString())
       setDate(expense.date)
-      setShowDeleteConfirm(false)
+      setConfirm({ open: false, mode: 'save' })
     }
   }, [expense, open])
 
@@ -46,21 +47,30 @@ export function ExpenseDetailsSheet({ expense, open, onClose, onDelete, onSave }
   const sourceLabel = expense.source === 'telegram' ? 'Telegram' : 'Aplicativo'
 
   const handleSave = () => {
-    onSave(expense.id, {
-      title: title.trim() || expense.title,
-      amount: Number(amount) || expense.amount,
-      date: date || expense.date,
-    })
-    onClose()
+    setConfirm({ open: true, mode: 'save' })
   }
 
   const handleDelete = () => {
-    if (!showDeleteConfirm) {
-      setShowDeleteConfirm(true)
-      return
+    setConfirm({ open: true, mode: 'delete' })
+  }
+
+  const handleConfirm = () => {
+    setConfirm({ open: false, mode: 'save' })
+    if (confirm.mode === 'save') {
+      onSave(expense.id, {
+        title: title.trim() || expense.title,
+        amount: Number(amount) || expense.amount,
+        date: date || expense.date,
+      })
+      onClose()
+    } else {
+      onDelete(expense.id)
+      onClose()
     }
-    onDelete(expense.id)
-    onClose()
+  }
+
+  const handleCancelConfirm = () => {
+    setConfirm({ open: false, mode: 'save' })
   }
 
   return (
@@ -230,30 +240,36 @@ export function ExpenseDetailsSheet({ expense, open, onClose, onDelete, onSave }
                   whileTap={{ scale: 0.97 }}
                   className="w-full py-3.5 rounded-xl flex items-center justify-center gap-2 text-sm font-semibold transition-colors"
                   style={{
-                    backgroundColor: showDeleteConfirm ? 'var(--color-danger)' : 'transparent',
-                    color: showDeleteConfirm ? '#fff' : 'var(--color-danger)',
-                    border: showDeleteConfirm ? 'none' : '1px solid var(--color-danger)',
+                    backgroundColor: 'transparent',
+                    color: 'var(--color-danger)',
+                    border: '1px solid var(--color-danger)',
                   }}
                 >
                   <Trash2 size={16} />
-                  {showDeleteConfirm ? 'Confirmar Exclusão' : 'Excluir Despesa'}
+                  Excluir Despesa
                 </motion.button>
-                {showDeleteConfirm && (
-                  <motion.p
-                    initial={{ opacity: 0, y: -5 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="text-xs text-center mt-2"
-                    style={{ color: 'var(--text-muted)' }}
-                  >
-                    Toque novamente para confirmar
-                  </motion.p>
-                )}
               </div>
 
             </div>
           </div>
         </motion.div>
       )}
+
+      {/* Confirmation Toast */}
+      <ConfirmToast
+        open={confirm.open}
+        title={confirm.mode === 'delete' ? 'Excluir despesa?' : 'Salvar alterações?'}
+        description={
+          confirm.mode === 'delete'
+            ? `"${expense?.title}" será removida permanentemente. Essa ação não pode ser desfeita.`
+            : `Tem certeza que quer salvar as alterações em "${expense?.title}"?`
+        }
+        confirmLabel={confirm.mode === 'delete' ? 'Sim, excluir' : 'Sim, salvar'}
+        cancelLabel="Cancelar"
+        danger={confirm.mode === 'delete'}
+        onConfirm={handleConfirm}
+        onCancel={handleCancelConfirm}
+      />
     </AnimatePresence>
   )
 }

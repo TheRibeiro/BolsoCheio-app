@@ -62,7 +62,7 @@ const GEMINI_SYSTEM_PROMPT = `Você é um analista financeiro de elite e extrato
 - Se mencionar APENAS "cartão" SEM especificar crédito ou débito -> responda com pergunta (ver abaixo)
 - Se mencionar "pix", "transferência", "ted" -> "pix"
 - Se mencionar "dinheiro", "espécie", "nota", "cédula" -> "dinheiro"
-- Se NÃO mencionar forma de pagamento, assuma "pix"
+- Se NÃO mencionar nenhuma forma de pagamento -> a verificação é feita externamente, NUNCA assuma nenhum valor
 
 ### REGRA ESPECIAL - "CARTÃO" AMBÍGUO:
 Se o usuário disser apenas "cartão" sem especificar crédito ou débito, retorne:
@@ -74,15 +74,13 @@ Retorne APENAS o objeto JSON abaixo, sem textos explicativos:
 {"valor": 0, "titulo": "", "categoria": "", "tipo_pagamento": "pix", "recorrente": false, "confirmacao_msg": ""}
 
 ### EXEMPLOS PARA APRENDIZADO:
-- "Comprei ingresso pra festa da facul 80 reais": {"valor": 80, "titulo": "Ingresso Festa", "categoria": "lazer", "tipo_pagamento": "pix", "recorrente": false, "confirmacao_msg": "✅ R$ 80,00 anotados em Lazer! Divirta-se! 🎉"}
 - "Paguei 35 de Uber no crédito": {"valor": 35, "titulo": "Uber", "categoria": "transporte", "tipo_pagamento": "cartao", "recorrente": false, "confirmacao_msg": "✅ R$ 35,00 em Transporte (Crédito). Boa viagem! 🚗"}
-- "Cortei o cabelo 50 pila": {"valor": 50, "titulo": "Barbeiro", "categoria": "vestuario", "tipo_pagamento": "pix", "recorrente": false, "confirmacao_msg": "✅ R$ 50,00 em Vestuário/Beleza. Ficou na régua! 💈"}
+- "Cortei o cabelo 50 pila no pix": {"valor": 50, "titulo": "Barbeiro", "categoria": "vestuario", "tipo_pagamento": "pix", "recorrente": false, "confirmacao_msg": "✅ R$ 50,00 em Vestuário/Beleza. Ficou na régua! 💈"}
 - "IPVA 1800 no débito": {"valor": 1800, "titulo": "IPVA", "categoria": "transporte", "tipo_pagamento": "debito", "recorrente": false, "confirmacao_msg": "✅ R$ 1.800,00 em Transporte (IPVA). Tá em dia! 🚗"}
-- "IPTU 450 reais": {"valor": 450, "titulo": "IPTU", "categoria": "moradia", "tipo_pagamento": "pix", "recorrente": false, "confirmacao_msg": "✅ R$ 450,00 em Moradia (IPTU). Casa em ordem! 🏠"}
-- "Conta de luz 180": {"valor": 180, "titulo": "Conta de Luz", "categoria": "moradia", "tipo_pagamento": "pix", "recorrente": true, "confirmacao_msg": "✅ R$ 180,00 em Moradia (Luz). Anotado! ⚡"}
+- "IPTU 450 reais no pix": {"valor": 450, "titulo": "IPTU", "categoria": "moradia", "tipo_pagamento": "pix", "recorrente": false, "confirmacao_msg": "✅ R$ 450,00 em Moradia (IPTU). Casa em ordem! 🏠"}
 - "Mensalidade faculdade 1200 no cartão": {"pergunta": "💳 Faculdade R$ 1.200,00 - foi no cartão de crédito ou débito?"}
 - "Paguei 50 no mercado no débito": {"valor": 50, "titulo": "Mercado", "categoria": "alimentacao", "tipo_pagamento": "debito", "recorrente": false, "confirmacao_msg": "✅ R$ 50,00 em Alimentação (Débito). Geladeira cheia! 🛒"}
-- "Ração do cachorro 120": {"valor": 120, "titulo": "Ração Pet", "categoria": "outros", "tipo_pagamento": "pix", "recorrente": false, "confirmacao_msg": "✅ R$ 120,00 em Outros (Pet). Au au! 🐕"}
+- "Ração do cachorro 120 dinheiro": {"valor": 120, "titulo": "Ração Pet", "categoria": "outros", "tipo_pagamento": "dinheiro", "recorrente": false, "confirmacao_msg": "✅ R$ 120,00 em Outros (Pet). Au au! 🐕"}
 
 Se a mensagem NÃO for sobre um gasto financeiro, responda:
 {"erro": "Não entendi como um gasto. Tente algo como: Gastei 50 reais no almoço"}
@@ -101,6 +99,38 @@ function hasAmbiguousCard(text: string): boolean {
   const hasDebitKeyword = /d[eé]bito|conta\s*corrente/.test(lower)
 
   return !hasCreditKeyword && !hasDebitKeyword
+}
+
+// --- Detectar ausência total de forma de pagamento ---
+function hasNoPaymentMethod(text: string): boolean {
+  const lower = text.toLowerCase()
+  const paymentKeywords = [
+    /pix/,
+    /transfer[eê]ncia/,
+    /\bted\b/,
+    /cr[eé]dito/,
+    /d[eé]bito/,
+    /cart[aã]o/,
+    /dinheiro/,
+    /esp[eé]cie/,
+    /\bnota\b/,
+    /c[eé]dula/,
+    /fatura/,
+    /parcelado/,
+    /parcela/,
+    /conta\s*corrente/,
+  ]
+  return !paymentKeywords.some((re) => re.test(lower))
+}
+
+// --- Detectar se mensagem é uma resposta de forma de pagamento ---
+function detectPaymentMethod(text: string): string | null {
+  const lower = text.toLowerCase().trim()
+  if (/\bpix\b|transfer[eê]ncia|ted/.test(lower)) return 'pix'
+  if (/cr[eé]dito|fatura/.test(lower)) return 'no crédito'
+  if (/d[eé]bito/.test(lower)) return 'no débito'
+  if (/dinheiro|esp[eé]cie/.test(lower)) return 'em dinheiro'
+  return null
 }
 
 // --- Supabase Client (service_role bypassa RLS) ---
@@ -535,12 +565,66 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    // --- Verificar se é resposta a uma pergunta de forma de pagamento pendente ---
+    const paymentAnswer = detectPaymentMethod(messageText)
+    if (paymentAnswer) {
+      const { data: pendingPaymentLog } = await supabase
+        .from('telegram_log')
+        .select('id, message_text')
+        .eq('chat_id', chatId)
+        .eq('status', 'pending_payment_method')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single()
+
+      if (pendingPaymentLog?.message_text) {
+        // Reprocessa a mensagem original com a forma de pagamento
+        const clarifiedMessage = pendingPaymentLog.message_text + ' ' + paymentAnswer
+
+        // Marca como processado
+        await supabase.from('telegram_log').update({ status: 'received' }).eq('id', pendingPaymentLog.id)
+
+        const aiResult = await callGeminiAI(clarifiedMessage)
+
+        if ('erro' in aiResult) {
+          await sendTelegramMessage(chatId, `🤔 ${aiResult.erro}`)
+          return new Response('OK', { status: 200 })
+        }
+
+        const transaction = await saveTransaction(profile.id, aiResult, profile.closing_day_card)
+        await logTelegram(chatId, clarifiedMessage, aiResult as unknown as Record<string, unknown>, transaction.id, 'processed')
+
+        const billingInfo = aiResult.tipo_pagamento === 'cartao'
+          ? `\n📅 Fatura: ${calculateBillingMonth(new Date(), profile.closing_day_card)}`
+          : ''
+
+        await sendTelegramMessage(chatId,
+          aiResult.confirmacao_msg + billingInfo +
+          (aiResult.recorrente ? '\n🔄 Recorrente' : '')
+        )
+        return new Response('OK', { status: 200 })
+      }
+    }
+
     // --- Verificar "cartão" ambíguo ANTES de chamar a IA ---
     if (hasAmbiguousCard(messageText)) {
       // Salva a mensagem como pendente para quando o usuário responder
       await logTelegram(chatId, messageText, null, null, 'pending_card_type')
       await sendTelegramMessage(chatId,
         '💳 Foi no cartão de <b>crédito</b> ou <b>débito</b>?'
+      )
+      return new Response('OK', { status: 200 })
+    }
+
+    // --- Verificar ausência de forma de pagamento ANTES de chamar a IA ---
+    if (hasNoPaymentMethod(messageText)) {
+      await logTelegram(chatId, messageText, null, null, 'pending_payment_method')
+      await sendTelegramMessage(chatId,
+        '💳 Como foi o pagamento?\n\n' +
+        '• <b>Pix</b>\n' +
+        '• <b>Crédito</b>\n' +
+        '• <b>Débito</b>\n' +
+        '• <b>Dinheiro</b>'
       )
       return new Response('OK', { status: 200 })
     }
