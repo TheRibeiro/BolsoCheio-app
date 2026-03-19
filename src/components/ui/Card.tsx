@@ -5,6 +5,7 @@ interface CardProps {
   children: ReactNode
   className?: string
   variant?: 'default' | 'elevated' | 'outlined' | 'hero'
+  style?: React.CSSProperties
 }
 
 const springTransition = {
@@ -14,7 +15,7 @@ const springTransition = {
   damping: 30,
 }
 
-export function Card({ children, className = '', variant = 'default' }: CardProps) {
+export function Card({ children, className = '', variant = 'default', style }: CardProps) {
   if (variant === 'hero') {
     return (
       <motion.div
@@ -23,6 +24,7 @@ export function Card({ children, className = '', variant = 'default' }: CardProp
         transition={springTransition}
         whileTap={{ scale: 0.98 }}
         className={`rounded-2xl p-5 hero-card ${className}`}
+        style={style}
       >
         <div className="relative z-10">{children}</div>
       </motion.div>

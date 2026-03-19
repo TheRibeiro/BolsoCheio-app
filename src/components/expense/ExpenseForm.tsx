@@ -90,7 +90,7 @@ export function ExpenseForm({ open, onClose }: ExpenseFormProps) {
     : null
 
   return (
-    <BottomSheet open={open} onClose={onClose} title="Novo Gasto">
+    <BottomSheet open={open} onClose={onClose} title="Anotar Gasto">
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         {/* Valor */}
         <div>
@@ -212,7 +212,7 @@ export function ExpenseForm({ open, onClose }: ExpenseFormProps) {
 
         {/* Botão Submit */}
         <Button type="submit" size="lg" className="w-full mt-2">
-          Adicionar Gasto
+          Anotar Gasto
         </Button>
       </form>
     </BottomSheet>

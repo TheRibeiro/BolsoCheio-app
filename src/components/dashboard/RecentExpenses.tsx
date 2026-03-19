@@ -42,8 +42,8 @@ export function RecentExpenses({ expenses, onClick }: RecentExpensesProps) {
     return (
       <EmptyState
         icon={<Receipt size={28} style={{ color: 'var(--color-primary)' }} />}
-        title="Nenhum gasto recente"
-        description="Toque no + para registrar seu primeiro gasto"
+        title="Bolso intacto!"
+        description="Nenhum gasto por aqui. Toque no + para anotar o primeiro"
       />
     )
   }

@@ -1,5 +1,6 @@
 import { format, parse, addMonths, startOfMonth, endOfMonth, eachDayOfInterval, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
+import { CATEGORY_CONFIG } from '../types'
 import type { CreditCardConfig, Expense, MonthSummary, Category } from '../types'
 
 /**
@@ -113,7 +114,7 @@ export function generateInsights(expenses: Expense[], month: string): string[] {
   const insights: string[] = []
 
   if (expenses.length === 0) {
-    return ['Comece a registrar seus gastos para receber dicas personalizadas!']
+    return ['Anote seus gastos para receber dicas do BolsoCheio!']
   }
 
   const fixedPercent = summary.totalSpent > 0
@@ -126,15 +127,15 @@ export function generateInsights(expenses: Expense[], month: string): string[] {
   // Insight sobre proporção fixo vs variável
   if (Number(fixedPercent) > 70) {
     insights.push(
-      `Seus gastos fixos representam ${fixedPercent}% do total. Considere renegociar assinaturas ou planos para reduzir esse valor.`
+      `Gastos fixos pesam ${fixedPercent}% do bolso. Vale renegociar algum plano ou assinatura?`
     )
   } else if (Number(variablePercent) > 60) {
     insights.push(
-      `Seus gastos variáveis representam ${variablePercent}% do total. Tente definir um orçamento diário para controlar melhor esses gastos.`
+      `Variáveis dominam com ${variablePercent}%. Que tal definir um teto diário pra manter o bolso cheio?`
     )
   } else {
     insights.push(
-      `Boa distribuição! Gastos fixos: ${fixedPercent}% | Variáveis: ${variablePercent}%. Continue assim!`
+      `Equilíbrio bom! Fixos: ${fixedPercent}% | Variáveis: ${variablePercent}%. Segue assim!`
     )
   }
 
@@ -145,9 +146,10 @@ export function generateInsights(expenses: Expense[], month: string): string[] {
 
   if (topCategory) {
     const [cat, value] = topCategory
+    const config = CATEGORY_CONFIG[cat]
     const percent = ((value / summary.totalSpent) * 100).toFixed(0)
     insights.push(
-      `A categoria que mais pesa no seu bolso é "${cat}" com ${percent}% dos gastos (${formatCurrency(value)}).`
+      `${config.emoji} ${config.label} puxa o bolso com ${percent}% dos gastos (${formatCurrency(value)}).`
     )
   }
 
@@ -162,7 +164,7 @@ export function generateInsights(expenses: Expense[], month: string): string[] {
     const highSpendDays = summary.dailySpending.filter((d) => d.total > avgDaily * 2).length
     if (highSpendDays > 3) {
       insights.push(
-        `Você teve ${highSpendDays} dias com gastos acima do dobro da média diária. Planeje suas compras para distribuir melhor ao longo do mês.`
+        `${highSpendDays} dias com gasto acima do dobro da média. Tenta distribuir melhor ao longo do mês!`
       )
     }
   }
@@ -172,7 +174,7 @@ export function generateInsights(expenses: Expense[], month: string): string[] {
   if (recurringExpenses.length > 0) {
     const recurringTotal = recurringExpenses.reduce((sum, e) => sum + e.amount, 0)
     insights.push(
-      `Você tem ${recurringExpenses.length} gastos recorrentes totalizando ${formatCurrency(recurringTotal)}/mês. Revise se todos ainda são necessários.`
+      `${recurringExpenses.length} gastos fixos somam ${formatCurrency(recurringTotal)}/mês. Todos ainda fazem sentido?`
     )
   }
 
@@ -183,12 +185,54 @@ export function generateInsights(expenses: Expense[], month: string): string[] {
     const creditPercent = ((creditTotal / summary.totalSpent) * 100).toFixed(0)
     if (Number(creditPercent) > 50) {
       insights.push(
-        `${creditPercent}% dos seus gastos são no cartão de crédito. Cuidado para não comprometer o próximo mês!`
+        `${creditPercent}% no cartão de crédito — cuidado pra não apertar o bolso no próximo mês!`
       )
     }
   }
 
   return insights
+}
+
+/**
+ * Gera um quick insight curto para a dashboard
+ */
+export function generateQuickInsight(
+  expenses: Expense[],
+  month: string,
+  envelopes: { category: Category; limit: number }[]
+): string | null {
+  if (expenses.length === 0) return null
+
+  const summary = calculateMonthSummary(expenses, month)
+  if (summary.totalSpent === 0) return null
+
+  // Priority 1: Envelope near limit
+  for (const env of envelopes) {
+    if (env.limit <= 0) continue
+    const spent = summary.byCategory[env.category] || 0
+    if (spent > env.limit * 0.85) {
+      const remaining = Math.max(0, env.limit - spent)
+      const config = CATEGORY_CONFIG[env.category]
+      if (spent > env.limit) {
+        return `${config.emoji} ${config.label} estourou o limite em ${formatCurrency(spent - env.limit)}`
+      }
+      return `${config.emoji} ${config.label} quase no limite — sobram ${formatCurrency(remaining)}`
+    }
+  }
+
+  // Priority 2: Top category
+  const topCat = (Object.entries(summary.byCategory) as [Category, number][])
+    .filter(([, v]) => v > 0)
+    .sort(([, a], [, b]) => b - a)[0]
+
+  if (topCat) {
+    const [cat, value] = topCat
+    const config = CATEGORY_CONFIG[cat]
+    const pct = ((value / summary.totalSpent) * 100).toFixed(0)
+    return `${config.emoji} ${config.label} lidera com ${pct}% dos gastos (${formatCurrency(value)})`
+  }
+
+  return null
 }
 
 /**
@@ -236,7 +280,7 @@ export function downloadCSV(csv: string, filename: string): void {
  * Retorna cor do progresso do envelope (verde/amarelo/vermelho)
  */
 export function getEnvelopeColor(spent: number, limit: number): string {
-  if (limit === 0) return '#6366f1' // sem limite = cor neutra
+  if (limit === 0) return '#14b8a6' // sem limite = cor teal
   const ratio = spent / limit
   if (ratio <= 0.6) return '#22c55e' // verde
   if (ratio <= 0.85) return '#f59e0b' // amarelo
