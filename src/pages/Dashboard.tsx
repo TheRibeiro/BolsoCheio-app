@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react'
 import { motion, type Variants } from 'framer-motion'
+import { Wallet } from 'lucide-react'
 import { useApp } from '../contexts/AppContext'
+import { useAuth } from '../contexts/AuthContext'
 import { MonthSummaryCard } from '../components/dashboard/MonthSummaryCard'
 import { SubscriptionCard } from '../components/dashboard/SubscriptionCard'
 import { CategoryBreakdown } from '../components/dashboard/CategoryBreakdown'
@@ -26,11 +28,20 @@ const itemVariants: Variants = {
   },
 }
 
+function getGreeting(): string {
+  const hour = new Date().getHours()
+  if (hour < 12) return 'Bom dia'
+  if (hour < 18) return 'Boa tarde'
+  return 'Boa noite'
+}
+
 export function Dashboard() {
   const { expenses, settings, deleteExpense, editExpense } = useApp()
+  const { profile } = useAuth()
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null)
-  
+
   const currentMonth = getCurrentMonth()
+  const firstName = profile?.full_name?.split(' ')[0] || ''
 
   const summary = useMemo(
     () => calculateMonthSummary(expenses, currentMonth),
@@ -44,14 +55,25 @@ export function Dashboard() {
       initial="initial"
       animate="animate"
     >
-      {/* Header — Elegant Typography (Manifesto §1) */}
-      <motion.div variants={itemVariants}>
-        <h1 className="text-xl sm:text-2xl font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>
-          BolsoCheio
-        </h1>
-        <p className="text-sm capitalize" style={{ color: 'var(--text-muted)' }}>
-          {formatMonth(currentMonth)}
-        </p>
+      {/* Header */}
+      <motion.div variants={itemVariants} className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>
+            {getGreeting()}{firstName ? `, ${firstName}` : ''}
+          </p>
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+            <Wallet size={24} style={{ color: 'var(--color-primary)' }} />
+            BolsoCheio
+          </h1>
+        </div>
+        <div className="text-right">
+          <p className="text-xs font-medium capitalize px-3 py-1.5 rounded-full" style={{
+            backgroundColor: 'var(--color-primary)',
+            color: '#ffffff',
+          }}>
+            {formatMonth(currentMonth)}
+          </p>
+        </div>
       </motion.div>
 
       {/* Resumo do Mês */}

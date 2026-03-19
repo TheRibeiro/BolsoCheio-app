@@ -43,25 +43,32 @@ export function SubscriptionCard({ expenses }: SubscriptionCardProps) {
   const totalCommitted = subscriptions.reduce((acc, curr) => acc + curr.amount, 0)
 
   return (
-    <Card className="flex flex-col gap-4">
-      <div className="flex items-center gap-3">
-        <div 
-          className="w-12 h-12 rounded-[14px] flex items-center justify-center shrink-0"
-          style={{ 
-            background: 'linear-gradient(135deg, rgba(20, 184, 166, 0.1), rgba(13, 148, 136, 0.1))',
-            border: '1px solid rgba(20, 184, 166, 0.2)'
-          }}
-        >
-          <PlayCircle size={24} style={{ color: 'var(--color-primary)' }} />
+    <Card variant="elevated" className="flex flex-col gap-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div
+            className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
+            style={{
+              background: 'linear-gradient(135deg, #14b8a6, #0d9488)',
+              boxShadow: '0 4px 12px rgba(20, 184, 166, 0.25)',
+            }}
+          >
+            <PlayCircle size={20} className="text-white" />
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+              Assinaturas
+            </h3>
+            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+              {subscriptions.length} ativa{subscriptions.length > 1 ? 's' : ''}
+            </p>
+          </div>
         </div>
-        <div>
-          <h3 className="text-sm font-semibold" style={{ color: 'var(--text-secondary)' }}>
-            Sua Trilha de Assinaturas
-          </h3>
-          <p className="text-2xl font-bold tracking-tight mt-0.5" style={{ color: 'var(--text-primary)' }}>
+        <div className="text-right">
+          <p className="text-xl font-bold tracking-tight" style={{ color: 'var(--color-primary)' }}>
             {formatCurrency(totalCommitted)}
-            <span className="text-xs font-medium ml-1" style={{ color: 'var(--text-muted)' }}>/mês</span>
           </p>
+          <p className="text-[10px] font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>/mês</p>
         </div>
       </div>
 

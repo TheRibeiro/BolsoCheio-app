@@ -184,7 +184,7 @@ export function History() {
 
       {/* Chart */}
       {chartData.length > 0 && (
-        <Card className="!p-0 overflow-hidden" highlight={false}>
+        <Card className="!p-0 overflow-hidden">
           <div className="p-4 pb-0 flex items-start justify-between">
             <div>
               <h3 className="text-sm font-semibold" style={{ color: 'var(--text-secondary)' }}>

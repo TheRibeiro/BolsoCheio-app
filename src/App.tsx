@@ -46,7 +46,7 @@ function AppContent() {
       <div className="noise-overlay" />
 
       {/* Main Content */}
-      <main className="flex-1 overflow-y-auto px-4 pt-4 pb-20 safe-top relative z-10">
+      <main className="flex-1 overflow-y-auto px-4 pt-4 pb-24 safe-top relative z-10">
         <AnimatePresence mode="wait">
           <motion.div
             key={activeTab}
@@ -73,80 +73,78 @@ function AppContent() {
         whileTap={{ scale: 0.92 }}
         whileHover={{ scale: 1.05 }}
         transition={{ type: 'spring', stiffness: 500, damping: 25 }}
-        className="fixed z-30 w-14 h-14 rounded-full flex items-center justify-center shadow-xl"
+        className="fixed z-30 w-14 h-14 rounded-full flex items-center justify-center"
         style={{
-          bottom: 'calc(4.5rem + env(safe-area-inset-bottom, 0px))',
+          bottom: 'calc(5.5rem + env(safe-area-inset-bottom, 0px))',
           right: '1rem',
           background: 'linear-gradient(135deg, #14b8a6, #0d9488)',
-          boxShadow: '0 8px 32px rgba(20, 184, 166, 0.35)',
+          boxShadow: '0 6px 24px rgba(20, 184, 166, 0.4), 0 2px 8px rgba(0, 0, 0, 0.1)',
         }}
       >
         <Plus size={24} className="text-white" />
       </motion.button>
 
-      {/* Bottom Tab Bar */}
-      <nav
-        className="fixed bottom-0 left-0 right-0 z-20 safe-bottom glass dark:glass"
-        style={{
-          backgroundColor: 'color-mix(in srgb, var(--bg-card) 70%, transparent)',
-          backdropFilter: 'blur(40px)',
-          WebkitBackdropFilter: 'blur(40px)',
-          borderTop: '1px solid var(--border-color)',
-        }}
-      >
-        <div className="flex items-center justify-around px-2 pt-2 pb-1 max-w-lg mx-auto">
-          {tabs.map(({ id, label, icon: Icon }) => {
-            const isActive = activeTab === id
-            return (
-              <motion.button
-                key={id}
-                onClick={() => {
-                  setActiveTab(id)
-                  vibrate(20)
-                }}
-                whileTap={{ scale: 0.9 }}
-                transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-                className="flex flex-col items-center gap-0.5 py-2 px-4 rounded-xl min-w-[48px] relative"
-              >
-                {isActive && (
-                  <motion.div
-                    layoutId="tab-bg"
-                    className="absolute inset-0 rounded-xl"
-                    style={{ backgroundColor: 'rgba(20, 184, 166, 0.1)' }}
-                    transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-                  />
-                )}
-                <Icon
-                  size={24}
-                  strokeWidth={isActive ? 2.5 : 1.5}
-                  className="relative z-10"
-                  style={{
-                    color: isActive ? 'var(--color-primary)' : 'var(--text-muted)',
-                    transition: 'color 0.2s',
+      {/* Floating Bottom Tab Bar */}
+      <div className="fixed bottom-0 left-0 right-0 z-20 px-4 safe-bottom">
+        <nav
+          className="max-w-lg mx-auto rounded-2xl mb-2"
+          style={{
+            backgroundColor: 'var(--bg-card)',
+            backdropFilter: 'blur(40px)',
+            WebkitBackdropFilter: 'blur(40px)',
+            border: '1px solid var(--border-color)',
+            boxShadow: '0 8px 32px var(--shadow-color)',
+          }}
+        >
+          <div className="flex items-center justify-around px-2 py-1.5">
+            {tabs.map(({ id, label, icon: Icon }) => {
+              const isActive = activeTab === id
+              return (
+                <motion.button
+                  key={id}
+                  onClick={() => {
+                    setActiveTab(id)
+                    vibrate(20)
                   }}
-                />
-                <span
-                  className="text-[10px] font-medium relative z-10"
-                  style={{
-                    color: isActive ? 'var(--color-primary)' : 'var(--text-muted)',
-                    transition: 'color 0.2s',
-                  }}
+                  whileTap={{ scale: 0.9 }}
+                  transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                  className="flex flex-col items-center gap-0.5 py-2 px-5 rounded-xl min-w-[52px] relative"
                 >
-                  {label}
-                </span>
-                {isActive && (
-                  <motion.div
-                    layoutId="tab-indicator"
-                    className="w-6 h-1 rounded-full mt-0.5 relative z-10"
-                    style={{ backgroundColor: 'var(--color-primary)' }}
-                    transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                  {isActive && (
+                    <motion.div
+                      layoutId="tab-bg"
+                      className="absolute inset-0 rounded-xl"
+                      style={{
+                        backgroundColor: 'var(--color-primary)',
+                        opacity: 0.12,
+                      }}
+                      transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                    />
+                  )}
+                  <Icon
+                    size={22}
+                    strokeWidth={isActive ? 2.5 : 1.5}
+                    className="relative z-10"
+                    style={{
+                      color: isActive ? 'var(--color-primary)' : 'var(--text-muted)',
+                      transition: 'color 0.2s',
+                    }}
                   />
-                )}
-              </motion.button>
-            )
-          })}
-        </div>
-      </nav>
+                  <span
+                    className="text-[10px] font-semibold relative z-10"
+                    style={{
+                      color: isActive ? 'var(--color-primary)' : 'var(--text-muted)',
+                      transition: 'color 0.2s',
+                    }}
+                  >
+                    {label}
+                  </span>
+                </motion.button>
+              )
+            })}
+          </div>
+        </nav>
+      </div>
 
       {/* Expense Form Bottom Sheet */}
       <ExpenseForm open={showExpenseForm} onClose={() => setShowExpenseForm(false)} />
