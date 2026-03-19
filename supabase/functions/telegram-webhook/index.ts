@@ -126,7 +126,7 @@ function hasNoPaymentMethod(text: string): boolean {
 // --- Detectar se mensagem é uma resposta de forma de pagamento ---
 function detectPaymentMethod(text: string): string | null {
   const lower = text.toLowerCase().trim()
-  if (/\bpix\b|transfer[eê]ncia|ted/.test(lower)) return 'pix'
+  if (/\bpix\b|transfer[eê]ncia|ted/.test(lower)) return 'no pix'
   if (/cr[eé]dito|fatura/.test(lower)) return 'no crédito'
   if (/d[eé]bito/.test(lower)) return 'no débito'
   if (/dinheiro|esp[eé]cie/.test(lower)) return 'em dinheiro'
@@ -519,7 +519,59 @@ Deno.serve(async (req: Request) => {
 
     const supabase = getSupabaseAdmin()
 
-    // --- Verificar se é resposta a uma pergunta pendente (crédito/débito) ---
+    // --- PRIMEIRO: verificar se há resposta a uma pergunta de forma de pagamento pendente ---
+    const { data: pendingPaymentLog } = await supabase
+      .from('telegram_log')
+      .select('id, message_text')
+      .eq('chat_id', chatId)
+      .eq('status', 'pending_payment_method')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (pendingPaymentLog?.message_text) {
+      const paymentAnswer = detectPaymentMethod(messageText)
+
+      if (!paymentAnswer) {
+        // Usuário não respondeu com uma forma de pagamento válida → re-pergunta
+        await sendTelegramMessage(chatId,
+          '❓ Não entendi. Como foi o pagamento?\n\n' +
+          '• <b>Pix</b>\n' +
+          '• <b>Crédito</b>\n' +
+          '• <b>Débito</b>\n' +
+          '• <b>Dinheiro</b>'
+        )
+        return new Response('OK', { status: 200 })
+      }
+
+      // Reprocessa a mensagem original com a forma de pagamento
+      const clarifiedMessage = pendingPaymentLog.message_text + ' ' + paymentAnswer
+
+      // Marca como processado
+      await supabase.from('telegram_log').update({ status: 'received' }).eq('id', pendingPaymentLog.id)
+
+      const aiResult = await callGeminiAI(clarifiedMessage)
+
+      if ('erro' in aiResult) {
+        await sendTelegramMessage(chatId, `🤔 ${aiResult.erro}`)
+        return new Response('OK', { status: 200 })
+      }
+
+      const transaction = await saveTransaction(profile.id, aiResult, profile.closing_day_card)
+      await logTelegram(chatId, clarifiedMessage, aiResult as unknown as Record<string, unknown>, transaction.id, 'processed')
+
+      const billingInfo = aiResult.tipo_pagamento === 'cartao'
+        ? `\n📅 Fatura: ${calculateBillingMonth(new Date(), profile.closing_day_card)}`
+        : ''
+
+      await sendTelegramMessage(chatId,
+        aiResult.confirmacao_msg + billingInfo +
+        (aiResult.recorrente ? '\n🔄 Recorrente' : '')
+      )
+      return new Response('OK', { status: 200 })
+    }
+
+    // --- Verificar se é resposta a uma pergunta de cartão pendente (crédito/débito) ---
     const lowerText = messageText.toLowerCase().trim()
     const isCreditAnswer = /cr[eé]dito/.test(lowerText)
     const isDebitAnswer = /d[eé]bito/.test(lowerText)
@@ -533,7 +585,7 @@ Deno.serve(async (req: Request) => {
         .eq('status', 'pending_card_type')
         .order('created_at', { ascending: false })
         .limit(1)
-        .single()
+        .maybeSingle()
 
       if (pendingLog?.message_text) {
         // Reprocessa a mensagem original com a especificação de crédito/débito
@@ -543,47 +595,6 @@ Deno.serve(async (req: Request) => {
         await supabase.from('telegram_log').update({ status: 'received' }).eq('id', pendingLog.id)
 
         // Processa a mensagem clarificada
-        const aiResult = await callGeminiAI(clarifiedMessage)
-
-        if ('erro' in aiResult) {
-          await sendTelegramMessage(chatId, `🤔 ${aiResult.erro}`)
-          return new Response('OK', { status: 200 })
-        }
-
-        const transaction = await saveTransaction(profile.id, aiResult, profile.closing_day_card)
-        await logTelegram(chatId, clarifiedMessage, aiResult as unknown as Record<string, unknown>, transaction.id, 'processed')
-
-        const billingInfo = aiResult.tipo_pagamento === 'cartao'
-          ? `\n📅 Fatura: ${calculateBillingMonth(new Date(), profile.closing_day_card)}`
-          : ''
-
-        await sendTelegramMessage(chatId,
-          aiResult.confirmacao_msg + billingInfo +
-          (aiResult.recorrente ? '\n🔄 Recorrente' : '')
-        )
-        return new Response('OK', { status: 200 })
-      }
-    }
-
-    // --- Verificar se é resposta a uma pergunta de forma de pagamento pendente ---
-    const paymentAnswer = detectPaymentMethod(messageText)
-    if (paymentAnswer) {
-      const { data: pendingPaymentLog } = await supabase
-        .from('telegram_log')
-        .select('id, message_text')
-        .eq('chat_id', chatId)
-        .eq('status', 'pending_payment_method')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single()
-
-      if (pendingPaymentLog?.message_text) {
-        // Reprocessa a mensagem original com a forma de pagamento
-        const clarifiedMessage = pendingPaymentLog.message_text + ' ' + paymentAnswer
-
-        // Marca como processado
-        await supabase.from('telegram_log').update({ status: 'received' }).eq('id', pendingPaymentLog.id)
-
         const aiResult = await callGeminiAI(clarifiedMessage)
 
         if ('erro' in aiResult) {
