@@ -520,14 +520,15 @@ Deno.serve(async (req: Request) => {
     const supabase = getSupabaseAdmin()
 
     // --- PRIMEIRO: verificar se há resposta a uma pergunta de forma de pagamento pendente ---
-    const { data: pendingPaymentLog } = await supabase
+    const { data: pendingPaymentRows } = await supabase
       .from('telegram_log')
       .select('id, message_text')
       .eq('chat_id', chatId)
       .eq('status', 'pending_payment_method')
       .order('created_at', { ascending: false })
       .limit(1)
-      .maybeSingle()
+
+    const pendingPaymentLog = pendingPaymentRows?.[0] ?? null
 
     if (pendingPaymentLog?.message_text) {
       const paymentAnswer = detectPaymentMethod(messageText)
@@ -578,14 +579,15 @@ Deno.serve(async (req: Request) => {
 
     if (isCreditAnswer || isDebitAnswer) {
       // Busca a última mensagem pendente deste chat
-      const { data: pendingLog } = await supabase
+      const { data: pendingCardRows } = await supabase
         .from('telegram_log')
         .select('id, message_text')
         .eq('chat_id', chatId)
         .eq('status', 'pending_card_type')
         .order('created_at', { ascending: false })
         .limit(1)
-        .maybeSingle()
+
+      const pendingLog = pendingCardRows?.[0] ?? null
 
       if (pendingLog?.message_text) {
         // Reprocessa a mensagem original com a especificação de crédito/débito
